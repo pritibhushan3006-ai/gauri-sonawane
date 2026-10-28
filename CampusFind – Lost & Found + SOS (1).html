@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>CampusFind – Lost & Found + SOS</title>
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f5f3ff;--card:#fff;--ink:#1e1b4b;--mute:#6b7280;--line:#e5e7eb}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f0d23;--card:#1a1740;--ink:#eef0ff;--mute:#a5a8c9;--line:#2c2a5a}}
+:root[data-theme="dark"]{--bg:#0f0d23;--card:#1a1740;--ink:#eef0ff;--mute:#a5a8c9;--line:#2c2a5a}
+body{background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+.card{background:var(--card);border:1px solid var(--line)}
+.mute{color:var(--mute)}
+input,select,textarea{background:var(--bg);border:1px solid var(--line);color:var(--ink);min-height:48px}
+.scene{perspective:700px;width:120px;height:120px}
+.cube{position:relative;width:100%;height:100%;transform-style:preserve-3d;animation:spin 14s linear infinite}
+.cube.drag{animation:none}
+.face{position:absolute;width:120px;height:120px;display:flex;align-items:center;justify-content:center;font-size:44px;border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.14);backdrop-filter:blur(2px);border-radius:14px}
+.f1{transform:translateZ(60px)}.f2{transform:rotateY(90deg) translateZ(60px)}.f3{transform:rotateY(180deg) translateZ(60px)}
+.f4{transform:rotateY(-90deg) translateZ(60px)}.f5{transform:rotateX(90deg) translateZ(60px)}.f6{transform:rotateX(-90deg) translateZ(60px)}
+@keyframes spin{from{transform:rotateX(-20deg) rotateY(0)}to{transform:rotateX(-20deg) rotateY(360deg)}}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,.6)}100%{box-shadow:0 0 0 26px rgba(239,68,68,0)}}
+.sos{animation:pulse 1.8s infinite}
+.fade{animation:fade .25s ease}@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+dialog{border:0;padding:0;background:transparent;max-width:100vw;max-height:100vh}
+dialog::backdrop{background:rgba(15,13,35,.65);backdrop-filter:blur(4px)}
+:focus-visible{outline:3px solid #f59e0b;outline-offset:2px}
+@media (prefers-reduced-motion:reduce){.cube,.sos,.fade{animation:none!important}}
+.skip{position:absolute;left:-999px}.skip:focus{left:8px;top:8px;z-index:99;background:#fff;color:#000;padding:10px;border-radius:8px}
+</style>
+</head>
+<body class="min-h-screen pb-28">
+<a href="#main" class="skip">Skip to items</a>
+
+<header class="bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 text-white px-4 pt-6 pb-8 rounded-b-[2rem] shadow-xl">
+  <div class="max-w-3xl mx-auto">
+    <div class="flex items-center justify-between">
+      <div class="font-extrabold text-xl tracking-tight">🎓 CampusFind</div>
+      <div class="flex gap-2">
+        <button id="btnSettings" class="min-h-[44px] min-w-[44px] rounded-xl bg-white/20 hover:bg-white/30 transition" aria-label="Emergency settings">⚙️</button>
+      </div>
+    </div>
+    <div class="flex items-center gap-4 mt-5">
+      <div class="flex-1">
+        <h1 class="text-2xl sm:text-3xl font-extrabold leading-tight">Lose it. Post it. Get it back.</h1>
+        <p class="text-white/85 text-sm mt-2">Crowdsourced lost &amp; found for your campus, with ownership verification.</p>
+        <div class="flex gap-4 mt-3 text-xs"><span id="sLost" class="bg-white/20 rounded-full px-3 py-1"></span><span id="sFound" class="bg-white/20 rounded-full px-3 py-1"></span><span id="sClaimed" class="bg-white/20 rounded-full px-3 py-1"></span><span id="sTests" class="bg-white/20 rounded-full px-3 py-1" title="Built-in self-tests"></span></div>
+      </div>
+      <div class="scene shrink-0 scale-75 sm:scale-100 -mr-4 sm:mr-0" id="scene" title="Drag me">
+        <div class="cube" id="cube"><div class="face f1">🔑</div><div class="face f2">📚</div><div class="face f3">👛</div><div class="face f4">🎧</div><div class="face f5">🔍</div><div class="face f6">🎒</div></div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main id="main" class="max-w-3xl mx-auto px-4 -mt-5">
+  <div class="card rounded-2xl shadow-lg p-3">
+    <div class="relative">
+      <span class="absolute left-3 top-1/2 -translate-y-1/2">🔎</span>
+      <input id="q" type="search" aria-label="Search items" placeholder="Search items, places, dates…" class="w-full rounded-xl pl-10 pr-3 text-base outline-none focus:ring-2 focus:ring-violet-500 transition">
+    </div>
+    <div id="cats" class="flex gap-2 overflow-x-auto mt-3 pb-1"></div>
+    <div class="flex gap-2 mt-2" id="types"></div>
+  </div>
+
+  <div class="flex items-center justify-between mt-6 mb-3">
+    <h2 class="font-bold text-lg" id="listTitle">All items</h2>
+    <span class="text-sm mute" id="count"></span>
+  </div>
+  <div id="list" class="grid gap-3 sm:grid-cols-2"></div>
+  <section class="mt-8" aria-labelledby="recH"><h2 id="recH" class="font-bold text-lg mb-2">🎉 Recently recovered on campus</h2><ul id="recovered" class="space-y-2 text-sm"></ul></section>
+</main>
+
+<!-- bottom bar -->
+<div class="fixed bottom-0 inset-x-0 z-20" style="padding-bottom:env(safe-area-inset-bottom,0px)">
+  <div class="max-w-3xl mx-auto px-4 pb-3 flex items-center gap-3">
+    <button id="btnReport" class="flex-1 min-h-[56px] rounded-2xl bg-gradient-to-r from-indigo-600 to-fuchsia-600 text-white font-bold shadow-xl active:scale-95 transition">＋ Report an Item</button>
+    <button id="btnVoice" class="min-h-[56px] px-4 rounded-2xl card font-semibold shadow-xl active:scale-95 transition" aria-pressed="false">🎙️ <span id="voiceTxt">Voice guard off</span></button>
+    <button id="btnSOS" class="sos min-h-[56px] min-w-[56px] rounded-full bg-red-600 text-white font-extrabold shadow-xl active:scale-95 transition">SOS</button>
+  </div>
+</div>
+
+<!-- report modal -->
+<dialog id="dReport" aria-label="Report an item"><div class="card rounded-3xl w-[92vw] max-w-md max-h-[90vh] overflow-y-auto p-5 fade">
+  <div class="flex justify-between items-center mb-3"><h3 class="font-extrabold text-xl">Report an item</h3><button data-close class="min-h-[44px] min-w-[44px] text-2xl" aria-label="Close">✕</button></div>
+  <form id="fReport" class="space-y-3" novalidate>
+    <div class="grid grid-cols-2 gap-2" id="typePick"></div>
+    <label class="block text-sm font-medium">Item name<input name="name" maxlength="60" class="w-full rounded-xl px-3 mt-1" placeholder="Black HP calculator"></label>
+    <label class="block text-sm font-medium">Category<select name="cat" class="w-full rounded-xl px-3 mt-1"></select></label>
+    <label class="block text-sm font-medium">Location<input name="loc" maxlength="60" class="w-full rounded-xl px-3 mt-1" placeholder="Library, 2nd floor"></label>
+    <label class="block text-sm font-medium">Date<input name="date" type="date" class="w-full rounded-xl px-3 mt-1"></label>
+    <label class="block text-sm font-medium">Contact (phone or email)<input name="contact" maxlength="60" class="w-full rounded-xl px-3 mt-1" placeholder="98XXXXXXXX or you@college.edu"></label>
+    <div class="rounded-xl p-3 border border-dashed border-violet-400 space-y-2">
+      <p class="text-xs mute">🔐 Security check: only a real owner should know this answer.</p>
+      <input name="question" aria-label="Security question" maxlength="80" class="w-full rounded-xl px-3" placeholder="Question, e.g. Wallpaper on the lock screen?">
+      <input name="answer" aria-label="Security answer" maxlength="40" class="w-full rounded-xl px-3" placeholder="Answer">
+    </div>
+    <p id="rErr" class="text-red-500 text-sm hidden" role="alert"></p>
+    <button class="w-full min-h-[52px] rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-bold transition">Submit report</button>
+  </form>
+</div></dialog>
+
+<!-- claim modal -->
+<dialog id="dClaim" aria-label="Verify ownership"><div class="card rounded-3xl w-[92vw] max-w-md p-5 fade">
+  <h3 class="font-extrabold text-xl">Verify ownership</h3>
+  <p class="text-sm mute mt-1" id="cItem"></p>
+  <p class="font-semibold mt-4" id="cQ"></p>
+  <input id="cA" aria-label="Your answer" class="w-full rounded-xl px-3 mt-2" placeholder="Your answer" autocomplete="off">
+  <p id="cMsg" class="text-sm mt-2 min-h-[1.25rem]" role="alert"></p>
+  <div class="flex gap-2 mt-3"><button data-close class="flex-1 min-h-[48px] rounded-xl card">Cancel</button><button id="cGo" class="flex-1 min-h-[48px] rounded-xl bg-emerald-600 text-white font-bold">Verify</button></div>
+</div></dialog>
+
+<!-- settings modal -->
+<dialog id="dSet" aria-label="Emergency setup"><div class="card rounded-3xl w-[92vw] max-w-md p-5 fade">
+  <div class="flex justify-between items-center mb-2"><h3 class="font-extrabold text-xl">Emergency setup</h3><button data-close class="min-h-[44px] min-w-[44px] text-2xl" aria-label="Close">✕</button></div>
+  <div class="space-y-3">
+    <label class="block text-sm font-medium">Your name<input id="sName" maxlength="40" class="w-full rounded-xl px-3 mt-1"></label>
+    <label class="block text-sm font-medium">Emergency contact name<input id="sCName" maxlength="40" class="w-full rounded-xl px-3 mt-1"></label>
+    <label class="block text-sm font-medium">Emergency contact number (with country code)<input id="sCNum" inputmode="tel" maxlength="16" class="w-full rounded-xl px-3 mt-1" placeholder="919876543210"></label>
+    <label class="block text-sm font-medium">Trigger word<input id="sWord" maxlength="20" class="w-full rounded-xl px-3 mt-1" placeholder="help"></label>
+    <p id="sErr" class="text-red-500 text-sm hidden"></p>
+    <button id="sSave" class="w-full min-h-[52px] rounded-xl bg-violet-600 text-white font-bold">Save</button>
+    <p class="text-xs mute">Voice guard listens for your trigger word while this tab is open. Browsers cannot send texts silently, so SOS opens WhatsApp or SMS with a ready message and your location for you to tap send. It matches the word, not your voice identity.</p>
+  </div>
+</div></dialog>
+
+<!-- SOS overlay -->
+<dialog id="dSOS" role="alertdialog" aria-label="SOS alert"><div class="rounded-3xl w-[92vw] max-w-md p-6 text-center text-white bg-red-600 fade">
+  <div class="text-5xl">🚨</div>
+  <h3 class="font-extrabold text-2xl mt-2" id="sosTitle">Sending SOS in 5…</h3>
+  <p class="text-sm text-white/90 mt-1" id="sosSub"></p>
+  <div id="sosActions" class="hidden space-y-2 mt-4">
+    <a id="aWa" target="_blank" rel="noopener" class="block min-h-[52px] leading-[52px] rounded-xl bg-white text-red-700 font-bold">Send via WhatsApp</a>
+    <a id="aSms" class="block min-h-[52px] leading-[52px] rounded-xl bg-white/20 font-bold">Send via SMS</a>
+  </div>
+  <button id="sosCancel" class="mt-4 w-full min-h-[52px] rounded-xl bg-black/30 font-bold">I’m safe – cancel</button>
+</div></dialog>
+
+<div id="toast" role="status" aria-live="polite" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 hidden px-4 py-3 rounded-xl bg-gray-900 text-white text-sm shadow-xl"></div>
+
+<script>
+/* CampusFind structure: state → storage → render → events → SOS → pure helpers + self-tests.
+   Pure helpers (validateReport, filterItems, checkAnswer) are unit-tested on load. */
+const CATS=['Electronics','Books','Keys','Wallets','Bags','Other'];
+const ICON={Electronics:'💻',Books:'📚',Keys:'🔑',Wallets:'👛',Bags:'🎒',Other:'📦'};
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const today=()=>new Date().toISOString().slice(0,10);
+let items=[],cfg={name:'',cname:'',cnum:'',word:'help'};
+let st={q:'',cat:'All',type:'all',newType:'lost',claimId:null};
+
+function load(){
+  try{items=JSON.parse(localStorage.getItem('cf_items')||'null')}catch(e){}
+  try{cfg={...cfg,...JSON.parse(localStorage.getItem('cf_cfg')||'{}')}}catch(e){}
+  if(!Array.isArray(items)||!items.length)items=[
+    {id:1,type:'lost',name:'Blue Casio scientific calculator',cat:'Electronics',loc:'Physics lab',date:today(),contact:'9800000001',status:'Reported Lost'},
+    {id:2,type:'found',name:'Hostel room key with red tag',cat:'Keys',loc:'Canteen',date:today(),contact:'9800000002',status:'Found',q:'What number is on the tag?',a:'204'},
+    {id:3,type:'found',name:'Brown leather wallet',cat:'Wallets',loc:'Main gate',date:today(),contact:'9800000003',status:'Found',q:'Which college ID is inside?',a:'ENTC'},
+    {id:4,type:'lost',name:'Engineering Maths textbook',cat:'Books',loc:'Library',date:today(),contact:'9800000004',status:'Reported Lost'},
+    {id:5,type:'found',name:'Black wireless earbuds',cat:'Electronics',loc:'Bus stop',date:today(),contact:'9800000005',status:'Claimed',q:'x',a:'x'}];
+}
+function save(){try{localStorage.setItem('cf_items',JSON.stringify(items))}catch(e){}}
+function saveCfg(){try{localStorage.setItem('cf_cfg',JSON.stringify(cfg))}catch(e){}}
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.remove('hidden');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.add('hidden'),2800)}
+
+const TAG={'Reported Lost':'bg-red-100 text-red-700','Found':'bg-amber-100 text-amber-800','Claimed':'bg-emerald-100 text-emerald-700'};
+function chip(label,active,attr){return `<button ${attr} aria-pressed="${!!active}" class="shrink-0 min-h-[44px] px-4 rounded-full text-sm font-semibold transition ${active?'bg-violet-600 text-white shadow':'card'}">${label}</button>`}
+
+function render(){
+  $('#cats').innerHTML=['All',...CATS].map(c=>chip((ICON[c]||'✨')+' '+c,st.cat===c,`data-cat="${c}"`)).join('');
+  $('#types').innerHTML=[['all','All'],['lost','Lost'],['found','Found']].map(([k,l])=>chip(l,st.type===k,`data-type="${k}"`)).join('');
+  const q=st.q.trim().toLowerCase();
+  const list=filterItems(items,st).sort((a,b)=>b.id-a.id);
+  $('#count').textContent=list.length+' result'+(list.length===1?'':'s');
+  $('#listTitle').textContent=st.type==='lost'?'Recent Lost Items':st.type==='found'?'Found Items':'Recent Items';
+  $('#list').innerHTML=list.length?list.map(i=>`<article class="card rounded-2xl p-4 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition fade">
+    <div class="flex items-start justify-between gap-2"><div class="text-3xl">${ICON[i.cat]||'📦'}</div><span class="text-xs font-bold px-3 py-1 rounded-full ${TAG[i.status]}">${i.status==='Found'?'Found – Unclaimed':i.status}</span></div>
+    <h3 class="font-bold mt-2">${esc(i.name)}</h3>
+    <p class="text-sm mute mt-1">📍 ${esc(i.loc)} · 📅 ${esc(i.date)}</p>
+    <p class="text-sm mute">📞 ${esc(i.contact)}</p>
+    ${i.status==='Claimed'?'<p class="mt-3 text-sm text-emerald-600 font-semibold">✔ Returned to owner</p>':
+     `<button data-claim="${i.id}" class="mt-3 w-full min-h-[48px] rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-semibold transition">${i.type==='found'?'Claim Item':'I found this'}</button>`}
+  </article>`).join(''):'<p class="mute col-span-full text-center py-10">Nothing matches. Try another filter or report the item.</p>';
+  $('#sLost').textContent=items.filter(i=>i.status==='Reported Lost').length+' lost';
+  $('#sFound').textContent=items.filter(i=>i.status==='Found').length+' found';
+  const rec=items.filter(i=>i.status==='Claimed');
+  $('#sClaimed').textContent=rec.length+' returned';
+  $('#recovered').innerHTML=rec.length?rec.slice(-4).reverse().map(i=>`<li class="card rounded-xl px-3 py-2">${ICON[i.cat]||'📦'} <b>${esc(i.name)}</b> <span class="mute">· found at ${esc(i.loc)}</span></li>`).join(''):'<li class="mute">No returns yet. Be the first to help someone out!</li>';
+}
+
+document.addEventListener('click',e=>{
+  const t=e.target.closest('button');if(!t)return;
+  if(t.dataset.cat){st.cat=t.dataset.cat;render()}
+  else if(t.dataset.type){st.type=t.dataset.type;render()}
+  else if(t.dataset.claim)openClaim(+t.dataset.claim);
+  else if(t.hasAttribute('data-close'))t.closest('dialog').close();
+});
+let qT;$('#q').addEventListener('input',e=>{clearTimeout(qT);const v=e.target.value;qT=setTimeout(()=>{st.q=v;render()},150)});
+
+/* report */
+function typePick(){$('#typePick').innerHTML=[['lost','😟 I lost it'],['found','🙌 I found it']].map(([k,l])=>chip(l,st.newType===k,`type="button" data-nt="${k}"`).replace('shrink-0','w-full')).join('')}
+$('#typePick').addEventListener('click',e=>{const b=e.target.closest('[data-nt]');if(b){st.newType=b.dataset.nt;typePick()}});
+$('#fReport [name=cat]').innerHTML=CATS.map(c=>`<option>${c}</option>`).join('');
+$('#btnReport').onclick=()=>{st.newType='lost';typePick();$('#fReport').reset();$('#fReport [name=date]').value=today();$('#rErr').classList.add('hidden');$('#dReport').showModal()};
+$('#fReport').addEventListener('submit',async e=>{
+  e.preventDefault();const f=Object.fromEntries(new FormData(e.target)),err=$('#rErr');
+  Object.keys(f).forEach(k=>f[k]=String(f[k]).trim());
+  const m=validateReport(f,today());
+  if(m){err.textContent=m;err.classList.remove('hidden');return}
+  const id=Date.now();
+  items.push({id,type:st.newType,name:f.name,cat:f.cat,loc:f.loc,date:f.date,contact:f.contact,status:st.newType==='lost'?'Reported Lost':'Found',q:f.question,h:await hash(id+':'+f.answer.toLowerCase())});
+  save();$('#dReport').close();st.type='all';st.cat='All';render();toast('✅ Item posted');
+});
+
+/* claim */
+function openClaim(id){
+  const i=items.find(x=>x.id===id);if(!i)return;st.claimId=id;
+  $('#cItem').textContent=i.name;$('#cQ').textContent=i.q||'Describe one detail only the owner would know.';
+  $('#cA').value='';$('#cMsg').textContent='';$('#dClaim').showModal();
+}
+$('#cGo').onclick=async()=>{
+  const i=items.find(x=>x.id===st.claimId),a=$('#cA').value.trim().toLowerCase(),m=$('#cMsg');
+  if(!a){m.textContent='Please type an answer.';m.className='text-sm mt-2 text-red-500';return}
+  const L=lock[i.id]||{n:0,until:0};
+  if(Date.now()<L.until){m.textContent='Too many tries. Wait '+Math.ceil((L.until-Date.now())/1000)+'s.';m.className='text-sm mt-2 text-red-500';return}
+  if(await checkAnswer(i,a)){delete lock[i.id];i.status='Claimed';save();render();m.textContent='✔ Verified! Contact: '+i.contact;m.className='text-sm mt-2 text-emerald-600 font-semibold'}
+  else{L.n++;if(L.n>=3){L.until=Date.now()+30000;L.n=0}lock[i.id]=L;m.textContent='✖ That does not match.'+(L.until>Date.now()?' Locked for 30s.':'');m.className='text-sm mt-2 text-red-500'}
+};
+
+/* settings */
+$('#btnSettings').onclick=()=>{$('#sName').value=cfg.name;$('#sCName').value=cfg.cname;$('#sCNum').value=cfg.cnum;$('#sWord').value=cfg.word;$('#sErr').classList.add('hidden');$('#dSet').showModal()};
+$('#sSave').onclick=()=>{
+  const n=$('#sName').value.trim(),cn=$('#sCName').value.trim(),num=$('#sCNum').value.replace(/[^\d]/g,''),w=$('#sWord').value.trim().toLowerCase()||'help',e=$('#sErr');
+  if(!n||!cn||num.length<10){e.textContent='Add your name, contact name and a valid number with country code.';e.classList.remove('hidden');return}
+  cfg={name:n,cname:cn,cnum:num,word:w};saveCfg();$('#dSet').close();toast('Emergency contact saved');
+};
+
+/* SOS */
+let sosTimer=null;
+function startSOS(why){
+  if(!cfg.cnum){toast('Set up your emergency contact first');$('#btnSettings').click();return}
+  if($('#dSOS').open)return;
+  let n=5;$('#sosActions').classList.add('hidden');$('#sosTitle').textContent='Sending SOS in '+n+'…';
+  $('#sosSub').textContent=why==='voice'?'Heard “'+cfg.word+'”. Tap cancel if this is a mistake.':'Tap cancel if this is a mistake.';
+  $('#dSOS').showModal();
+  sosTimer=setInterval(()=>{n--;if(n>0)$('#sosTitle').textContent='Sending SOS in '+n+'…';else{clearInterval(sosTimer);fire()}},1000);
+}
+function fire(){
+  $('#sosTitle').textContent='Notify '+cfg.cname;$('#sosSub').textContent='Getting your location…';
+  const go=loc=>{
+    const msg=`🚨 SOS! ${cfg.name} is in trouble and needs help.${loc?' Location: '+loc:''} Please call them now.`;
+    $('#aWa').href='https://wa.me/'+cfg.cnum+'?text='+encodeURIComponent(msg);
+    $('#aSms').href='sms:+'+cfg.cnum+'?body='+encodeURIComponent(msg);
+    $('#sosSub').textContent='Tap a button to send the alert.';$('#sosActions').classList.remove('hidden');
+  };
+  if(navigator.geolocation)navigator.geolocation.getCurrentPosition(p=>go('https://maps.google.com/?q='+p.coords.latitude+','+p.coords.longitude),()=>go(''),{timeout:5000});else go('');
+}
+$('#btnSOS').onclick=()=>startSOS('button');
+$('#sosCancel').onclick=()=>{clearInterval(sosTimer);$('#dSOS').close()};
+$('#dSOS').addEventListener('cancel',()=>clearInterval(sosTimer));
+
+/* voice guard */
+let rec=null,listening=false;
+$('#btnVoice').onclick=()=>{
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){toast('Voice recognition is not supported in this browser. Use Chrome.');return}
+  if(listening){listening=false;rec&&rec.stop();setVoice(false);return}
+  if(!cfg.cnum){toast('Set up your emergency contact first');$('#btnSettings').click();return}
+  rec=new SR();rec.continuous=true;rec.interimResults=true;rec.lang='en-IN';
+  rec.onresult=e=>{
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const t=e.results[i][0].transcript.toLowerCase();
+      if(t.includes(cfg.word)){rec.stop();startSOS('voice');return}
+    }
+  };
+  rec.onend=()=>{if(listening){try{rec.start()}catch(e){}}};
+  rec.onerror=e=>{if(e.error==='not-allowed'||e.error==='service-not-allowed'){listening=false;setVoice(false);toast('Microphone permission denied')}};
+  try{rec.start();listening=true;setVoice(true)}catch(e){toast('Could not start the microphone')}
+};
+function setVoice(on){$('#btnVoice').setAttribute('aria-pressed',on);$('#voiceTxt').textContent=on?'Listening…':'Voice guard off';$('#btnVoice').classList.toggle('ring-2',on);$('#btnVoice').classList.toggle('ring-red-500',on)}
+
+/* 3D cube drag */
+(()=>{const s=$('#scene'),c=$('#cube');let d=false,x=0,y=0,rx=-20,ry=0;
+s.addEventListener('pointerdown',e=>{d=true;x=e.clientX;y=e.clientY;c.classList.add('drag');s.setPointerCapture(e.pointerId)});
+s.addEventListener('pointermove',e=>{if(!d)return;ry+=(e.clientX-x)*.6;rx-=(e.clientY-y)*.6;x=e.clientX;y=e.clientY;c.style.transform=`rotateX(${rx}deg) rotateY(${ry}deg)`});
+s.addEventListener('pointerup',()=>{d=false});})();
+
+/* ===== Security: hashed answers + claim rate limit ===== */
+const lock={};
+async function hash(s){
+  try{const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
+  catch(e){let h=0;for(const c of s)h=(h*31+c.charCodeAt(0))|0;return 'f'+h}
+}
+async function checkAnswer(item,a){return !!item.h&&(await hash(item.id+':'+String(a).trim().toLowerCase()))===item.h}
+async function migrate(){let ch=false;for(const i of items){if(i.a!==undefined){i.h=await hash(i.id+':'+String(i.a).toLowerCase());delete i.a;ch=true}}if(ch)save()}
+
+/* ===== Pure helpers ===== */
+function validateReport(f,td){
+  if(f.name.length<3)return 'Item name needs at least 3 characters.';
+  if(f.loc.length<2)return 'Please add the location.';
+  if(!f.date||f.date>td)return 'Pick a valid date (not in the future).';
+  if(!(/^\+?\d[\d\s-]{7,14}$/.test(f.contact)||/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.contact)))return 'Enter a valid phone number or email.';
+  if(f.question.length<5||!f.answer)return 'Add a security question and its answer.';
+  return '';
+}
+function filterItems(list,s){
+  const q=s.q.trim().toLowerCase();
+  return list.filter(i=>(s.cat==='All'||i.cat===s.cat)&&(s.type==='all'||i.type===s.type)&&(!q||[i.name,i.loc,i.cat,i.date].join(' ').toLowerCase().includes(q)));
+}
+
+/* ===== Self-tests (run on load) ===== */
+async function runTests(){
+  let ok=0,total=0;const t=(c)=>{total++;if(c)ok++};
+  const good={name:'Key',loc:'Gate',date:'2020-01-01',contact:'9876543210',question:'What colour?',answer:'red'};
+  t(validateReport(good,'2026-01-01')==='');
+  t(validateReport({...good,name:'a'},'2026-01-01')!=='');
+  t(validateReport({...good,date:'2099-01-01'},'2026-01-01')!=='');
+  t(validateReport({...good,contact:'abc'},'2026-01-01')!=='');
+  t(validateReport({...good,contact:'me@college.edu'},'2026-01-01')==='');
+  t(validateReport({...good,answer:''},'2026-01-01')!=='');
+  const L=[{name:'Blue key',loc:'Canteen',cat:'Keys',type:'found',date:'d'},{name:'Maths book',loc:'Library',cat:'Books',type:'lost',date:'d'}];
+  t(filterItems(L,{q:'',cat:'All',type:'all'}).length===2);
+  t(filterItems(L,{q:'',cat:'Keys',type:'all'}).length===1);
+  t(filterItems(L,{q:'library',cat:'All',type:'all'}).length===1);
+  t(filterItems(L,{q:'',cat:'All',type:'lost'}).length===1);
+  const it={id:7,h:await hash('7:204')};
+  t(await checkAnswer(it,' 204 '));
+  t(!(await checkAnswer(it,'205')));
+  t((await hash('a'))!==(await hash('b')));
+  const el=$('#sTests');el.textContent=(ok===total?'✅ ':'⚠️ ')+ok+'/'+total+' tests';
+}
+
+/* ===== Efficiency: pause work when tab is hidden ===== */
+document.addEventListener('visibilitychange',()=>{
+  $('#cube').style.animationPlayState=document.hidden?'paused':'running';
+  if(document.hidden&&listening){listening=false;rec&&rec.stop();setVoice(false)}
+});
+$('#cA').addEventListener('keydown',e=>{if(e.key==='Enter')$('#cGo').click()});
+
+load();render();migrate().then(()=>{render();runTests()});
+</script>
+</body>
+</html>
